@@ -64,7 +64,7 @@ fileprivate struct FloatingPanelModifier<PanelContent: View>: ViewModifier {
 extension View {
     func floatingPanel<Content: View>(
         isPresented: Binding<Bool>,
-        contentRect: CGRect = NSScreen.bottomLeftPosition(width: 360, height: 360), // Only specify width
+        contentRect: CGRect = NSScreen.bottomLeftPosition(width: 480, height: 320), // Only specify width
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         self.modifier(FloatingPanelModifier(

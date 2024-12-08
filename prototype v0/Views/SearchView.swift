@@ -6,23 +6,152 @@
 //
 
 import SwiftUI
+import Combine
+import os.log
 
+// MARK: - Search ViewModel
+@MainActor
+final class SearchViewModel: ObservableObject {
+    @Published var searchText: String = ""
+    @Published private(set) var searchResults: [ResultItem] = []
+    @Published private(set) var error: Error?
+    @Published var shouldFocusInput = false
+    @Published private(set) var uploadedFile: FileAttachment?
+    
+    private var cancellables = Set<AnyCancellable>()
+    private let searchManager = SmartSearchManager.shared
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.app", category: "SearchView")
+    
+    init() {
+        setupSearchDebounce()
+    }
+    
+    private func setupSearchDebounce() {
+        $searchText
+            .removeDuplicates()
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { [weak self] query in
+                Task {
+                    await self?.performSearch(query: query)
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func performSearch(query: String) async {
+        guard !query.isEmpty else {
+            searchResults = []
+            return
+        }
+        
+        error = nil
+        
+        do {
+            searchResults = searchManager.search(query: query) { [weak self] action in
+                self?.handleSearchAction(action)
+            }
+        } catch {
+            self.error = error
+        }
+    }
+    
+    func handleSearchAction(_ action: String) {
+        Task {
+            do {
+                switch true {
+                case action.hasPrefix("ai_query:"):
+                    try await handleAIQuery(String(action.dropFirst(9)))
+                case action.hasPrefix("open_article:"):
+                    try await openArticle(String(action.dropFirst(13)))
+                case action.hasPrefix("create_article:"):
+                    try await createArticle(String(action.dropFirst(15)))
+                case action.hasPrefix("create_ticket:"):
+                    try await createTicket(String(action.dropFirst(14)))
+                default:
+                    logger.warning("Unknown action: \(action)")
+                }
+            } catch {
+                self.error = error
+            }
+        }
+    }
+    
+    func uploadFile(from window: NSWindow?) async throws {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.styleMask.remove(.resizable)
+        panel.level = .modalPanel
+        
+        // Set the panel to be a child window of the floating panel
+        if let parentWindow = window {
+            panel.parent = parentWindow
+            parentWindow.addChildWindow(panel, ordered: .above)
+            
+            // Make sure the floating panel is key and accessible
+            defer {
+                parentWindow.makeKeyAndOrderFront(nil)
+                shouldFocusInput = true
+            }
+            
+            guard panel.runModal() == .OK,
+                  let url = panel.url else {
+                return
+            }
+            
+            try await handleFileUpload(url)
+        }
+    }
+    
+    private func handleFileUpload(_ url: URL) async throws {
+        logger.info("Uploading file: \(url.path)")
+        uploadedFile = FileAttachment(url: url)
+        try await Task.sleep(nanoseconds: 100_000_000)
+    }
+    
+    func removeUploadedFile() {
+        uploadedFile = nil
+    }
+    
+    func showFilters() {
+        logger.info("Showing filters")
+    }
+    
+    func browse() {
+        logger.info("Browsing")
+    }
+    
+    private func handleAIQuery(_ query: String) async throws {
+        logger.info("Handling AI query: \(query)")
+    }
+    
+    private func openArticle(_ articleId: String) async throws {
+        logger.info("Opening article: \(articleId)")
+    }
+    
+    private func createArticle(_ title: String) async throws {
+        logger.info("Creating article: \(title)")
+    }
+    
+    private func createTicket(_ title: String) async throws {
+        logger.info("Creating ticket: \(title)")
+    }
+}
 
+// MARK: - SearchView
 struct SearchView: View {
-    @Binding var searchText: String
+    @StateObject private var viewModel = SearchViewModel()
     @FocusState private var isFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.floatingPanel) private var floatingPanel
     @State private var selectedIndex = 0
-    @State private var searchResults: [ResultItem] = []
-    
-    private let searchManager = SmartSearchManager.shared
     
     var body: some View {
         VStack(spacing: 0) {
-//             Search Results
-            if !searchResults.isEmpty {
+            // Search Results
+            if !viewModel.searchResults.isEmpty {
                 SearchResultsView(
-                    results: searchResults,
+                    results: viewModel.searchResults,
                     selectedIndex: $selectedIndex,
                     isFocused: _isFocused
                 )
@@ -30,33 +159,44 @@ struct SearchView: View {
                     .background(Color.white.opacity(0.1))
             }
             
+            // File Preview
+            if let file = viewModel.uploadedFile {
+                FileAttachmentView(
+                    attachment: file,
+                    style: .expanded,
+                    onRemove: {
+                        viewModel.removeUploadedFile()
+                    }
+                )
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            
             // Search bar
             HStack(spacing: 8) {
-                TextField("Search across Maple's Knowledge...", text: $searchText)
+                TextField("Search across Maple's Knowledge...", text: $viewModel.searchText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14, weight: .medium))
                     .focused($isFocused)
                     .tint(colorScheme == .dark ? .white : .black)
                     // Handle keyboard navigation
-                    .onKeyPress(.upArrow) { 
+                    .onKeyPress(.upArrow) {
                         moveSelection(up: true)
                         return .handled
                     }
-                    .onKeyPress(.downArrow) { 
+                    .onKeyPress(.downArrow) {
                         moveSelection(up: false)
                         return .handled
                     }
-                    .onKeyPress(.return) { 
-                        if !searchResults.isEmpty {
-                            searchResults[selectedIndex].action()
+                    .onKeyPress(.return) {
+                        if !viewModel.searchResults.isEmpty {
+                            viewModel.searchResults[selectedIndex].action()
                         }
                         return .handled
                     }
             }
             .padding(.top, 16)
-            .padding(.trailing, 16)
-            .padding(.leading, 16)
-            .padding(.bottom, 0)
+            .padding(.horizontal, 16)
             
             // Action Buttons
             HStack(spacing: 4) {
@@ -64,41 +204,62 @@ struct SearchView: View {
                     icon: .upload,
                     tooltip: "Upload File"
                 ) {
-                    uploadFile()
+                    Task {
+                        if let panel = floatingPanel {
+                            try? await viewModel.uploadFile(from: panel)
+                        }
+                    }
                 }
+                
                 ActionButton(
                     icon: .browse,
                     tooltip: "Browse Folders"
                 ) {
-                    browse()
+                    viewModel.browse()
                 }
+                
                 ActionButton(
                     icon: .filter,
                     tooltip: "Filter"
                 ) {
-                    showFilters()
+                    viewModel.showFilters()
                 }
                 
                 Spacer()
+                
+                if let error = viewModel.error {
+                    Text(error.localizedDescription)
+                        .foregroundColor(.red)
+                        .font(.caption)
+                }
                 
                 ActionButton(
                     icon: .send,
                     tooltip: "Ask",
                     iconColor: .black
                 ) {
-                    sendQuery()
+                    // Send query action is handled by return key
                 }
                 .background(Color.white)
                 .cornerRadius(.infinity)
-                .opacity(isFocused && !searchText.isEmpty ? 1 : 0.4)
+                .opacity(isFocused && !viewModel.searchText.isEmpty ? 1 : 0.4)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
-            
-           
         }
         .onAppear {
             isFocused = true
+        }
+        .onChange(of: viewModel.shouldFocusInput) { shouldFocus in
+            if shouldFocus {
+                isFocused = true
+                viewModel.shouldFocusInput = false
+            }
+        }
+        .onChange(of: viewModel.searchText) { text in
+            if let panel = floatingPanel as? SearchPanelProtocol {
+                panel.updateSearchState(hasText: !text.isEmpty)
+            }
         }
         .frame(width: 360)
         .background(Color(hue: 0, saturation: 0, brightness: 0.08, opacity: 1))
@@ -107,202 +268,24 @@ struct SearchView: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.white.opacity(0.2), lineWidth: 1)
         )
-        .onChange(of: searchText) { _, newValue in
-           searchResults = searchManager.search(query: newValue) { action in
-               handleSearchAction(action)
-           }
-           selectedIndex = 0
-       }
-//        .overlay(alignment: .top) {
-//            // Results popover
-//            if !searchResults.isEmpty {
-//                SearchResultsView(
-//                    results: searchResults,
-//                    selectedIndex: $selectedIndex,
-//                    isFocused: _isFocused
-//                )
-//                .frame(width: 360)
-//                .background(Color(hue: 0, saturation: 0, brightness: 0.08, opacity: 1))
-//                .cornerRadius(10)
-//                .overlay(
-//                    RoundedRectangle(cornerRadius: 10)
-//                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
-//                )
-//                .offset(y: -10) // Gap between search box and results
-//                .transition(.opacity.combined(with: .move(edge: .bottom)))
-//            }
-//        }
-//        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: searchResults.count)
     }
     
     private func moveSelection(up: Bool) {
-        if searchResults.isEmpty { return }
+        if viewModel.searchResults.isEmpty { return }
         
-        // Invert the up/down logic since the list is reversed
         if up {
-            // Moving up in reversed list means decreasing the index
-            selectedIndex = selectedIndex >= searchResults.count - 1 ? 0 : selectedIndex + 1
+            selectedIndex = selectedIndex >= viewModel.searchResults.count - 1 ? 0 : selectedIndex + 1
         } else {
-            // Moving down in reversed list means increasing the index
-            selectedIndex = selectedIndex <= 0 ? searchResults.count - 1 : selectedIndex - 1
+            selectedIndex = selectedIndex <= 0 ? viewModel.searchResults.count - 1 : selectedIndex - 1
         }
     }
-    
-    private func handleSearchAction(_ action: String) {
-        // Handle different actions based on the prefix
-        if action.hasPrefix("ai_query:") {
-            print("Sending AI query:", action)
-        } else if action.hasPrefix("open_article:") {
-            print("Opening article:", action)
-        } else if action.hasPrefix("create_article:") {
-            print("Creating article:", action)
-        } else if action.hasPrefix("create_ticket:") {
-            print("Creating ticket:", action)
-        } else {
-            print("Action",action)
-        }
-    }
-    
-    // Action functions
-    func uploadFile() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        if panel.runModal() == .OK {
-            print("Selected file: \(panel.url?.path ?? "")")
-        }
-    }
-    
-    func showFilters() {
-        print("Show filters")
-    }
-    
-    func browse() {
-        print("Browse")
-    }
-    
-    func sendQuery() {
-        if !searchText.isEmpty {
-            print("Sending query: \(searchText)")
-        }
-    }
-    
-    private func performSearch(query: String) {
-            if query.isEmpty {
-                searchResults = []
-                return
-            }
-            
-            let lowercaseQuery = query.lowercased()
-            
-            // AI and Knowledge Base results
-            searchResults = [
-                ResultItem(
-                    icon: "sparkle",
-                    title: "Ask AI about '\(query)'",
-                    shortcut: "⏎",
-                    action: { sendQuery() }
-                ),
-                ResultItem(
-                    icon: "doc.text",
-                    title: "Search knowledge base",
-                    shortcut: "⌘+K",
-                    action: { searchKnowledgeBase(query) }
-                )
-            ]
-            
-            // Simulated knowledge base matches
-            let knowledgeResults = [
-                ("How to set up SSO", "Authentication & Security", "lock"),
-                ("Deployment best practices", "DevOps", "server.rack"),
-                ("Employee onboarding process", "HR", "person.badge.plus"),
-                ("Sales pipeline management", "Sales", "chart.xyaxis.line"),
-                ("Product roadmap 2024", "Product", "map")
-            ]
-            
-            // Add matching knowledge base articles
-            for (title, category, icon) in knowledgeResults {
-                if title.lowercased().contains(lowercaseQuery) ||
-                   category.lowercased().contains(lowercaseQuery) {
-                    searchResults.append(
-                        ResultItem(
-                            icon: icon,
-                            title: title,
-                            shortcut: "⏎",
-                            action: { openArticle(title) }
-                        )
-                    )
-                }
-            }
-            
-            // Simulated ticket/issue results
-            let tickets = [
-                ("#1234", "Login issues with SSO", "High", "exclamationmark.triangle"),
-                ("#1235", "Update documentation", "Medium", "doc.badge.clock"),
-                ("#1236", "API rate limiting", "Low", "network")
-            ]
-            
-            // Add matching tickets
-            for (id, title, priority, icon) in tickets {
-                if title.lowercased().contains(lowercaseQuery) {
-                    searchResults.append(
-                        ResultItem(
-                            icon: icon,
-                            title: "\(id): \(title) (\(priority))",
-                            shortcut: nil,
-                            action: { openTicket(id) }
-                        )
-                    )
-                }
-            }
-            
-            // Add contextual actions
-            if query.count > 2 {
-                searchResults.append(
-                    ResultItem(
-                        icon: "plus.circle",
-                        title: "Create new article about '\(query)'",
-                        shortcut: "⌘+N",
-                        action: { createNewArticle(query) }
-                    )
-                )
-                
-                searchResults.append(
-                    ResultItem(
-                        icon: "ticket",
-                        title: "Create ticket for '\(query)'",
-                        shortcut: "⌘+T",
-                        action: { createNewTicket(query) }
-                    )
-                )
-            }
-        }
-        
-        // Action handlers
-        private func searchKnowledgeBase(_ query: String) {
-            print("Searching knowledge base for: \(query)")
-        }
-        
-        private func openArticle(_ title: String) {
-            print("Opening article: \(title)")
-        }
-        
-        private func openTicket(_ id: String) {
-            print("Opening ticket: \(id)")
-        }
-        
-        private func createNewArticle(_ title: String) {
-            print("Creating new article: \(title)")
-        }
-        
-        private func createNewTicket(_ title: String) {
-            print("Creating new ticket: \(title)")
-        }
 }
 
-// Preview
-#Preview {
-    SearchView(searchText: .constant(""))
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.windowBackgroundColor))
+// MARK: - Preview
+#if DEBUG
+struct SearchView_Previews: PreviewProvider {
+    static var previews: some View {
+        SearchView()
+    }
 }
+#endif

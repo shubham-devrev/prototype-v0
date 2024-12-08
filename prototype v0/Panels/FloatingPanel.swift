@@ -18,9 +18,16 @@ extension EnvironmentValues {
     }
 }
 
-class FloatingPanel<Content: View>: NSPanel {
+// First, add a protocol to identify our panel
+protocol SearchPanelProtocol: AnyObject {
+    func updateSearchState(hasText: Bool)
+}
+
+class FloatingPanel<Content: View>: NSPanel, SearchPanelProtocol {
     @Binding var isPresented: Bool
-    
+    var hasSearchText: Bool = false
+    private var preventAutoClose: Bool = false
+
     init(view: () -> Content,
          contentRect: NSRect,
          backing: NSWindow.BackingStoreType = .buffered,
@@ -29,28 +36,29 @@ class FloatingPanel<Content: View>: NSPanel {
         self._isPresented = isPresented
         
         super.init(contentRect: contentRect,
-                  styleMask: [.nonactivatingPanel, .titled, .resizable, .closable, .fullSizeContentView],
+                  styleMask: [.borderless, .nonactivatingPanel],
                   backing: backing,
                   defer: flag)
         
+        // Set up window appearance
         isOpaque = false
         backgroundColor = .clear
+        hasShadow = false
         
+        // Set up window behavior
         isFloatingPanel = true
         level = .floating
         collectionBehavior.insert(.fullScreenAuxiliary)
-        titleVisibility = .hidden
-        titlebarAppearsTransparent = true
         isMovableByWindowBackground = true
         hidesOnDeactivate = true
         
         // Create hosting view with bottom-aligned content
         let hostingView = NSHostingView(rootView:
             VStack {
-                Spacer() // Push content to bottom
+                Spacer()
                 view()
             }
-            .frame(maxHeight: .infinity) // Take full height
+            .frame(maxHeight: .infinity)
             .ignoresSafeArea()
             .environment(\.floatingPanel, self)
         )
@@ -70,19 +78,31 @@ class FloatingPanel<Content: View>: NSPanel {
             ), display: true)
         }
         
-        
+        // Hide standard window buttons
         standardWindowButton(.closeButton)?.isHidden = true
         standardWindowButton(.miniaturizeButton)?.isHidden = true
         standardWindowButton(.zoomButton)?.isHidden = true
         
+        // Set window behaviors
         animationBehavior = .utilityWindow
-
-        
+        collectionBehavior = [.fullScreenAuxiliary, .managed, .canJoinAllSpaces]
+        isReleasedWhenClosed = false
     }
     
     override func resignMain() {
-        super.resignMain()
-        close()
+        // Only close if there's no search text
+        if !hasSearchText {
+            super.resignMain()
+            close()
+        }
+    }
+    
+    func updateSearchState(hasText: Bool) {
+        self.hasSearchText = hasText
+    }
+    
+    func setPanelCloseBehavior(preventClose: Bool) {
+        self.preventAutoClose = preventClose
     }
     
     override func close() {

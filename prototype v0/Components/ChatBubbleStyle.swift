@@ -1,4 +1,13 @@
-// ChatBubbleStyle.swift
+//
+//  ChatBubbleStyle.swift
+//  prototype v0
+//
+//  Created by Shubham Gandhi on 08/12/24.
+//
+
+
+import SwiftUI
+
 struct ChatBubbleStyle {
     let backgroundColor: Color
     let textColor: Color

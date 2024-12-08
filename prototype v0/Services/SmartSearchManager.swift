@@ -185,58 +185,141 @@ class SmartSearchManager: ObservableObject {
         
         // Process query for intent detection
         let queryLower = query.lowercased()
-        let words = queryLower.components(separatedBy: " ")
         
-        // Action detection patterns
-        let actionPatterns: [(verb: String, noun: String, icon: String, shortcut: String)] = [
-            ("create", "ticket", "ticket", "⌘+T"),
-            ("create", "article", "doc.text", "⌘+N"),
-            ("create", "issue", "exclamationmark.triangle", "⌘+I"),
-            ("create", "opportunity", "chart.line.uptrend.xyaxis", "⌘+O"),
-            ("create", "resource", "folder", "⌘+R"),
-            ("new", "ticket", "ticket", "⌘+T"),
-            ("new", "article", "doc.text", "⌘+N"),
-            ("new", "issue", "exclamationmark.triangle", "⌘+I"),
-            ("add", "ticket", "ticket", "⌘+T"),
-            ("add", "article", "doc.text", "⌘+N"),
-            ("open", "ticket", "ticket", "⌘+T"),
-            ("start", "ticket", "ticket", "⌘+T"),
-        ]
-        
-        // Check for action intents
-        var detectedAction: (verb: String, noun: String, icon: String, shortcut: String)?
-        var remainingQuery = query
-        
-        for pattern in actionPatterns {
-            if words.contains(pattern.verb) && words.contains(pattern.noun) {
-                detectedAction = pattern
-                // Remove action words from query
-                remainingQuery = queryLower
-                    .replacingOccurrences(of: pattern.verb, with: "")
-                    .replacingOccurrences(of: pattern.noun, with: "")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                break
-            }
+        // After knowledgeBase declaration, add:
+        struct ActionPattern {
+            let verbs: [String]
+            let nouns: [String]
+            let icon: String
+            let shortcut: String
+            let type: String
         }
+
+        let actionPatterns: [ActionPattern] = [
+            // Ticket related
+            ActionPattern(
+                verbs: ["create", "new", "add", "open", "start", "make", "raise", "submit", "file"],
+                nouns: ["ticket", "issue", "bug", "problem", "request", "support"],
+                icon: "ticket",
+                shortcut: "⌘+T",
+                type: "ticket"
+            ),
+            
+            // Article related
+            ActionPattern(
+                verbs: ["create", "new", "add", "write", "publish", "draft", "compose"],
+                nouns: ["article", "doc", "document", "guide", "tutorial", "post"],
+                icon: "doc.text",
+                shortcut: "⌘+N",
+                type: "article"
+            ),
+            
+            // Profile related
+            ActionPattern(
+                verbs: ["create", "new", "add", "setup", "configure", "make"],
+                nouns: ["profile", "account", "user", "contact", "person"],
+                icon: "person.circle",
+                shortcut: "⌘+P",
+                type: "profile"
+            ),
+            
+            // Opportunity related
+            ActionPattern(
+                verbs: ["create", "new", "add", "start", "track", "register"],
+                nouns: ["opportunity", "deal", "lead", "sale", "prospect"],
+                icon: "chart.line.uptrend.xyaxis",
+                shortcut: "⌘+O",
+                type: "opportunity"
+            ),
+            
+            // Resource related
+            ActionPattern(
+                verbs: ["create", "new", "add", "upload", "share", "store"],
+                nouns: ["resource", "file", "asset", "document", "attachment"],
+                icon: "folder",
+                shortcut: "⌘+R",
+                type: "resource"
+            ),
+            
+            // Task related
+            ActionPattern(
+                verbs: ["create", "new", "add", "assign", "schedule"],
+                nouns: ["task", "todo", "assignment", "work", "activity"],
+                icon: "checklist",
+                shortcut: "⌘+K",
+                type: "task"
+            ),
+            
+            // Meeting related
+            ActionPattern(
+                verbs: ["create", "new", "schedule", "setup", "arrange", "book"],
+                nouns: ["meeting", "call", "appointment", "session", "discussion"],
+                icon: "video",
+                shortcut: "⌘+M",
+                type: "meeting"
+            ),
+            
+            // Project related
+            ActionPattern(
+                verbs: ["create", "new", "start", "initialize", "begin"],
+                nouns: ["project", "initiative", "program", "campaign"],
+                icon: "folder.badge.gearshape",
+                shortcut: "⌘+J",
+                type: "project"
+            )
+        ]
+
+        // Add this helper function
+        func detectAction(in query: String) -> (ActionPattern, String)? {
+            let queryLower = query.lowercased()
+            let words = queryLower.components(separatedBy: " ")
+            
+            for pattern in actionPatterns {
+                // Check if query contains any of the verbs and nouns
+                let hasVerb = pattern.verbs.contains { verb in
+                    words.contains(verb)
+                }
+                let hasNoun = pattern.nouns.contains { noun in
+                    words.contains(noun)
+                }
+                
+                if hasVerb && hasNoun {
+                    // Extract title by removing action words
+                    let titleWords = words.filter { word in
+                        !pattern.verbs.contains(word) && !pattern.nouns.contains(word)
+                    }
+                    
+                    let title = titleWords
+                        .map { $0.capitalized }
+                        .joined(separator: " ")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    return (pattern, title)
+                }
+            }
+            
+            return nil
+        }
+                
+        // Detect action and extract title
+        let actionResult = detectAction(in: query)
         
-        // If action detected, make it the primary result
-        if let action = detectedAction {
-            let actionTitle = remainingQuery.isEmpty ?
-                "Create new \(action.noun)" :
-                "Create \(action.noun): \(remainingQuery)"
+        if let (pattern, title) = actionResult {
+            let actionTitle = title.isEmpty
+                ? "Create new \(pattern.type)"
+                : "Create \(pattern.type): \(title)"
             
             results.append(
                 ResultItem(
-                    icon: action.icon,
+                    icon: pattern.icon,
                     title: actionTitle,
-                    shortcut: action.shortcut,
-                    action: { onAction("create_\(action.noun): \(remainingQuery)") }
+                    shortcut: pattern.shortcut,
+                    action: { onAction("create_\(pattern.type): \(title)") }
                 )
             )
-        }
-        
-        // AI suggestion (if no action detected or as secondary option)
-        if detectedAction == nil {
+            
+        } else {
+            // AI suggestion (if no action detected)
             results.append(
                 ResultItem(
                     icon: "sparkle",
@@ -278,7 +361,7 @@ class SmartSearchManager: ObservableObject {
         })
         
         // Suggest contextual actions if no direct action detected
-        if detectedAction == nil && query.count > 2 {
+        if actionResult == nil && query.count > 2 {
             // Suggest most relevant action based on query content
             let relevantActions = [
                 ("ticket", queryLower.contains("issue") || queryLower.contains("problem")),
