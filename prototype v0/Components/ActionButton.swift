@@ -10,14 +10,13 @@ import SwiftUI
 // Enum for type-safe icons
 enum ActionButtonIcon: String {
     case upload = "paperclip"
-    case filter = "line.3.horizontal.decrease"
     case browse = "globe"
+    case filter = "line.3.horizontal.decrease.circle"
+    case send = "arrow.up"
+    case camera = "camera.viewfinder"
     case voice = "mic"
     case delete = "trash"
     case edit = "pencil"
-    case send = "arrow.up"
-    case share = "square.and.arrow.up"
-    case download = "arrow.down.circle"
     case settings = "gear"
     case search = "magnifyingglass"
     case close = "xmark.circle.fill"

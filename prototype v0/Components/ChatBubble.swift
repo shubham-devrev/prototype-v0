@@ -9,7 +9,7 @@ import SwiftUI
 
 private enum Constants {
     static let avatarBottomPadding: CGFloat = 16
-    static let avatarSize: CGFloat = 32
+    static let avatarSize: CGFloat = 24
     static let maxContentWidth: CGFloat = 400
     static let bubblePadding: CGFloat = 12
     static let bubbleSpacing: CGFloat = 8

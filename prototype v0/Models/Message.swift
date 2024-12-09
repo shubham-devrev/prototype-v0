@@ -195,12 +195,12 @@ struct Message: Identifiable, Codable {
     
     private func validateAndProcessAttachment(_ attachment: FileAttachment) async throws -> FileAttachment {
         // Validate file exists
-        guard await FileManager.default.fileExists(atPath: attachment.url.path) else {
+        guard FileManager.default.fileExists(atPath: attachment.url.path) else {
             throw FileError.fileNotFound
         }
         
         // Validate file size
-        let attributes = try await FileManager.default.attributesOfItem(atPath: attachment.url.path)
+        let attributes = try FileManager.default.attributesOfItem(atPath: attachment.url.path)
         guard let fileSize = attributes[.size] as? Int64, fileSize > 0 else {
             throw FileError.invalidFileSize
         }

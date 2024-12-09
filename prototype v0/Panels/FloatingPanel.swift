@@ -21,6 +21,7 @@ extension EnvironmentValues {
 // First, add a protocol to identify our panel
 protocol SearchPanelProtocol: AnyObject {
     func updateSearchState(hasText: Bool)
+    func setPanelCloseBehavior(preventClose: Bool)
 }
 
 class FloatingPanel<Content: View>: NSPanel, SearchPanelProtocol {
@@ -90,8 +91,8 @@ class FloatingPanel<Content: View>: NSPanel, SearchPanelProtocol {
     }
     
     override func resignMain() {
-        // Only close if there's no search text
-        if !hasSearchText {
+        // Only close if there's no search text and auto-close is not prevented
+        if !hasSearchText && !preventAutoClose {
             super.resignMain()
             close()
         }

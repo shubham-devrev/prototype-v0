@@ -8,6 +8,7 @@
 import SwiftUI
 import Combine
 import os.log
+import AppKit
 
 // MARK: - Search ViewModel
 @MainActor
@@ -17,6 +18,8 @@ final class SearchViewModel: ObservableObject {
     @Published private(set) var error: Error?
     @Published var shouldFocusInput = false
     @Published private(set) var uploadedFile: FileAttachment?
+    @Published private(set) var capturedScreenshot: NSImage?
+    @Published private(set) var capturedWindowInfo: [String: Any]?
     
     private var cancellables = Set<AnyCancellable>()
     private let searchManager = SmartSearchManager.shared
@@ -46,12 +49,8 @@ final class SearchViewModel: ObservableObject {
         
         error = nil
         
-        do {
-            searchResults = searchManager.search(query: query) { [weak self] action in
-                self?.handleSearchAction(action)
-            }
-        } catch {
-            self.error = error
+        searchResults = searchManager.search(query: query) { [weak self] action in
+            self?.handleSearchAction(action)
         }
     }
     
@@ -136,6 +135,16 @@ final class SearchViewModel: ObservableObject {
     private func createTicket(_ title: String) async throws {
         logger.info("Creating ticket: \(title)")
     }
+    
+    func setCapturedScreenshot(_ image: NSImage?, windowInfo: [String: Any]?) {
+        capturedScreenshot = image
+        capturedWindowInfo = windowInfo
+    }
+    
+    func clearCapturedScreenshot() {
+        capturedScreenshot = nil
+        capturedWindowInfo = nil
+    }
 }
 
 // MARK: - SearchView
@@ -148,8 +157,10 @@ struct SearchView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Search Results
-            if !viewModel.searchResults.isEmpty {
+            // Search Results - Only show if no screenshot or file is present
+            if !viewModel.searchResults.isEmpty && 
+               viewModel.capturedScreenshot == nil && 
+               viewModel.uploadedFile == nil {
                 SearchResultsView(
                     results: viewModel.searchResults,
                     selectedIndex: $selectedIndex,
@@ -157,6 +168,19 @@ struct SearchView: View {
                 )
                 Divider()
                     .background(Color.white.opacity(0.1))
+            }
+            
+            // Screenshot Preview
+            if let screenshot = viewModel.capturedScreenshot {
+                ScreenshotPreview(
+                    screenshot: screenshot,
+                    window: viewModel.capturedWindowInfo ?? [:],
+                    onRemove: {
+                        viewModel.clearCapturedScreenshot()
+                    }
+                )
+                .padding(.horizontal, 8)
+                .padding(.top, 8)
             }
             
             // File Preview
@@ -168,8 +192,8 @@ struct SearchView: View {
                         viewModel.removeUploadedFile()
                     }
                 )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 8)
+                .padding(.top, 8)
             }
             
             // Search bar
@@ -219,10 +243,22 @@ struct SearchView: View {
                 }
                 
                 ActionButton(
-                    icon: .filter,
-                    tooltip: "Filter"
+                    icon: .camera,
+                    tooltip: "Capture Window"
                 ) {
-                    viewModel.showFilters()
+                    Task {
+                        if await WindowScreenshotPicker.checkScreenRecordingPermission() {
+                            WindowScreenshotPicker.captureWindow { screenshot, windowInfo in
+                                if let screenshot = screenshot {
+                                    viewModel.setCapturedScreenshot(screenshot, windowInfo: windowInfo)
+                                    viewModel.searchText = "I have a question about this screenshot: "
+                                    isFocused = true
+                                }
+                            }
+                        } else {
+                            WindowScreenshotPicker.requestScreenRecordingPermission()
+                        }
+                    }
                 }
                 
                 Spacer()
@@ -250,16 +286,22 @@ struct SearchView: View {
         .onAppear {
             isFocused = true
         }
-        .onChange(of: viewModel.shouldFocusInput) { shouldFocus in
-            if shouldFocus {
+        .onChange(of: viewModel.shouldFocusInput) { oldValue, newValue in
+            if newValue {
                 isFocused = true
                 viewModel.shouldFocusInput = false
             }
         }
-        .onChange(of: viewModel.searchText) { text in
+        .onChange(of: viewModel.searchText) { oldValue, newValue in
             if let panel = floatingPanel as? SearchPanelProtocol {
-                panel.updateSearchState(hasText: !text.isEmpty)
+                panel.updateSearchState(hasText: !newValue.isEmpty)
             }
+        }
+        .onChange(of: viewModel.capturedScreenshot != nil) { oldValue, newValue in
+            updatePanelCloseBehavior()
+        }
+        .onChange(of: viewModel.uploadedFile != nil) { oldValue, newValue in
+            updatePanelCloseBehavior()
         }
         .frame(width: 360)
         .background(Color(hue: 0, saturation: 0, brightness: 0.08, opacity: 1))
@@ -277,6 +319,13 @@ struct SearchView: View {
             selectedIndex = selectedIndex >= viewModel.searchResults.count - 1 ? 0 : selectedIndex + 1
         } else {
             selectedIndex = selectedIndex <= 0 ? viewModel.searchResults.count - 1 : selectedIndex - 1
+        }
+    }
+    
+    private func updatePanelCloseBehavior() {
+        if let panel = floatingPanel as? SearchPanelProtocol {
+            // Prevent panel from closing if there's a screenshot or uploaded file
+            panel.setPanelCloseBehavior(preventClose: viewModel.capturedScreenshot != nil || viewModel.uploadedFile != nil)
         }
     }
 }
