@@ -136,26 +136,48 @@ struct User: Identifiable, Equatable, Codable {
 // Updated mock data
 extension User {
     static let mockUsers = [
-        User(id: "1",
-             name: "John Doe",
-             email: "john@company.com",
-             avatarUrl: nil,
-             status: .online,
-             role: .admin,
-             type: .internal),
-        User(id: "2",
-             name: "Jane Smith",
-             email: "jane@external.com",
-             avatarUrl: nil,
-             status: .away,
-             role: .member,
-             type: .external),
+        User(
+            id: "1",
+            name: "John Doe",
+            email: "john@company.com",
+            avatarUrl: URL(string: "https://i.pravatar.cc/150?img=1"),
+            status: .online,
+            role: .admin,
+            type: .internal
+        ),
+        User(
+            id: "2",
+            name: "Sarah Chen",
+            email: "sarah@company.com",
+            avatarUrl: URL(string: "https://i.pravatar.cc/150?img=3"),
+            status: .online,
+            role: .member,
+            type: .internal
+        ),
+        User(
+            id: "3",
+            name: "Alex Miller",
+            email: "alex@company.com",
+            avatarUrl: URL(string: "https://i.pravatar.cc/150?img=4"),
+            status: .away,
+            role: .member,
+            type: .internal
+        ),
+        User(
+            id: "4",
+            name: "Emma Wilson",
+            email: "emma@external.com",
+            avatarUrl: URL(string: "https://i.pravatar.cc/150?img=5"),
+            status: .online,
+            role: .member,
+            type: .external,
+            account: Account(
+                name: "Acme Corp",
+                logoUrl: URL(string: "https://logo.clearbit.com/acme.com")
+            )
+        )
     ]
-}
-
-
-// Add this to wherever your User model is defined
-extension User {
+    
     static let previewInternal = User(
         id: "1",
         name: "John Internal",

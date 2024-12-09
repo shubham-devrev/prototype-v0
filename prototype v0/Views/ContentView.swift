@@ -15,6 +15,9 @@ struct ContentView: View {
         Button("Search (⌘K)") {
             showingPanel.toggle()
         }
+        .tooltip() {
+            Text("Press to search")
+        }
         .floatingPanel(
             isPresented: $showingPanel,
             contentRect: NSScreen.bottomLeftPosition(width: 360)
