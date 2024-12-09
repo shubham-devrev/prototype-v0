@@ -11,6 +11,8 @@ import AppKit
 struct ContentView: View {
     @State private var showingPanel = false
     @State private var searchText = ""
+    @State private var selectedView = "home"
+    @State private var selectedChatId: String? = nil
     
     var body: some View {
         ZStack {
@@ -18,42 +20,56 @@ struct ContentView: View {
                 .edgesIgnoringSafeArea(.all)
             
             HStack(spacing: 0) {
-                SidebarView()
+                SidebarView(activeButton: $selectedView, selectedChatId: $selectedChatId)
                 
+                // Main content area
                 VStack {
-                    Button("Search (⌘K)") {
-                        showingPanel.toggle()
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .padding(8)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(6)
-                    .help("Press to search")
-                    .floatingPanel(
-                        isPresented: $showingPanel,
-                        contentRect: NSScreen.bottomLeftPosition(width: 360)
-                    ) {
-                        SearchView()
-                    }
-                    .keyboardShortcut("k", modifiers: .command)
-                    .onChange(of: showingPanel, initial: false) { oldValue, newValue in
-                        if !newValue {
-                            searchText = ""
+                    // Main content view switching
+                    Group {
+                        switch selectedView {
+                        case "home":
+                            HomeView()
+                        case "inbox":
+                            InboxView()
+                        case "explore":
+                            ExploreView()
+                        case "chat":
+                            ChatView(chatId: selectedChatId ?? "all-chats", isAIChat: false)
+                        case "ai":
+                            ChatView(chatId: "ai-assistant", isAIChat: true)
+                        case let id where User.mockUsers.contains(where: { $0.id == id }):
+                            ChatView(chatId: id, isAIChat: false)
+                        default:
+                            Text("Select a view")
                         }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .floatingPanel(
+                    isPresented: $showingPanel,
+                    contentRect: NSScreen.bottomLeftPosition(width: 360)
+                ) {
+                    SearchView()
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 800, minHeight: 600)
+        .onAppear {
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "k" {
+                    showingPanel.toggle()
+                    return nil
+                }
+                return event
+            }
+        }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
         .preferredColorScheme(.dark)
 }
 
