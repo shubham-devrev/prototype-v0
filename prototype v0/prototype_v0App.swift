@@ -10,6 +10,10 @@ import SwiftData
 
 @main
 struct prototype_v0App: App {
+    init() {
+        WindowConfig.configureMainWindow()
+    }
+    
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
@@ -27,6 +31,7 @@ struct prototype_v0App: App {
         WindowGroup {
             ContentView()
         }
+        .windowStyle(.hiddenTitleBar)
         .modelContainer(sharedModelContainer)
     }
 }
