@@ -10,5 +10,11 @@
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>com.apple.screencapture.interactive</string>
+	</array>
+	<key>com.apple.security.temporary-exception.screen-capture</key>
+	<true/>
 </dict>
 </plist>
