@@ -158,9 +158,11 @@ struct SearchView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Search Results - Only show if no screenshot or file is present
-            if !viewModel.searchResults.isEmpty && 
-               viewModel.capturedScreenshot == nil && 
-               viewModel.uploadedFile == nil {
+            let shouldShowResults = !viewModel.searchResults.isEmpty
+            let noScreenshot = viewModel.capturedScreenshot == nil
+            let noUploadedFile = viewModel.uploadedFile == nil
+            
+            if shouldShowResults && noScreenshot && noUploadedFile {
                 SearchResultsView(
                     results: viewModel.searchResults,
                     selectedIndex: $selectedIndex,
@@ -200,7 +202,7 @@ struct SearchView: View {
             HStack(spacing: 8) {
                 TextField("Search across Maple's Knowledge...", text: $viewModel.searchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 14))
                     .focused($isFocused)
                     .tint(colorScheme == .dark ? .white : .black)
                     // Handle keyboard navigation
@@ -226,7 +228,7 @@ struct SearchView: View {
             HStack(spacing: 4) {
                 ActionButton(
                     icon: .upload,
-                    tooltip: "Upload File"
+                    helpText: "Upload File"
                 ) {
                     Task {
                         if let panel = floatingPanel {
@@ -237,14 +239,14 @@ struct SearchView: View {
                 
                 ActionButton(
                     icon: .browse,
-                    tooltip: "Browse Folders"
+                    helpText: "Browse Folders"
                 ) {
                     viewModel.browse()
                 }
                 
                 ActionButton(
                     icon: .camera,
-                    tooltip: "Capture Window"
+                    helpText: "Capture Window"
                 ) {
                     Task {
                         if await WindowScreenshotPicker.checkScreenRecordingPermission() {
@@ -271,7 +273,7 @@ struct SearchView: View {
                 
                 ActionButton(
                     icon: .send,
-                    tooltip: "Ask",
+                    helpText: "Ask",
                     iconColor: .black
                 ) {
                     // Send query action is handled by return key
@@ -304,12 +306,21 @@ struct SearchView: View {
             updatePanelCloseBehavior()
         }
         .frame(width: 360)
-        .background(Color(hue: 0, saturation: 0, brightness: 0.08, opacity: 1))
         .cornerRadius(10)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.white.opacity(0.2), lineWidth: 1)
         )
+        .background {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    Rectangle()
+                        .fill(.black)
+                        .opacity(0.2)
+                }
+                .cornerRadius(10)
+        }
     }
     
     private func moveSelection(up: Bool) {

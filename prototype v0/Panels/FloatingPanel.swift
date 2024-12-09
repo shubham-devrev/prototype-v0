@@ -44,7 +44,14 @@ class FloatingPanel<Content: View>: NSPanel, SearchPanelProtocol {
         // Set up window appearance
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = false
+        hasShadow = true
+        
+        // Configure shadow
+        self.contentView?.wantsLayer = true
+        self.contentView?.layer?.shadowColor = NSColor.black.cgColor
+        self.contentView?.layer?.shadowOpacity = 0.35
+        self.contentView?.layer?.shadowOffset = CGSize(width: 0, height: -2)
+        self.contentView?.layer?.shadowRadius = 12
         
         // Set up window behavior
         isFloatingPanel = true

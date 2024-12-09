@@ -26,19 +26,19 @@ enum ActionButtonIcon: String {
 
 struct ActionButton: View {
     let icon: ActionButtonIcon
-    let tooltip: String
+    let helpText: String
     let action: () -> Void
     let iconColor: Color // Add color property
     
     // Add initializer with default color
     init(
         icon: ActionButtonIcon,
-        tooltip: String,
+        helpText: String,
         iconColor: Color = .secondary, // Default to primary color
         action: @escaping () -> Void
     ) {
         self.icon = icon
-        self.tooltip = tooltip
+        self.helpText = helpText
         self.iconColor = iconColor
         self.action = action
     }
@@ -51,7 +51,7 @@ struct ActionButton: View {
                 .frame(width: 24, height: 24)
         }
         .buttonStyle(ActionButtonStyle())
-        .help(tooltip)
+        .help(helpText)
     }
 }
 
@@ -95,14 +95,14 @@ struct ActionButton_Previews: PreviewProvider {
         HStack {
             ActionButton(
                 icon: .upload,
-                tooltip: "Upload File"
+                helpText: "Upload File"
             ) {
                 print("Upload tapped")
             }
             
             ActionButton(
                 icon: .filter,
-                tooltip: "Filter"
+                helpText: "Filter"
             ) {
                 print("Filter tapped")
             }

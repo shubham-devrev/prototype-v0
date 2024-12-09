@@ -29,9 +29,7 @@ struct ContentView: View {
                     .padding(8)
                     .background(.ultraThinMaterial)
                     .cornerRadius(6)
-                    .tooltip() {
-                        Text("Press to search")
-                    }
+                    .help("Press to search")
                     .floatingPanel(
                         isPresented: $showingPanel,
                         contentRect: NSScreen.bottomLeftPosition(width: 360)

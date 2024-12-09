@@ -8,7 +8,7 @@ public enum ButtonVariant {
 public struct SidebarActionButton<Content: View>: View {
     // MARK: - Properties
     private let isActive: Bool
-    private let tooltipText: String
+    private let helpText: String
     private let content: Content
     private let action: () -> Void
     private let id: String
@@ -16,13 +16,12 @@ public struct SidebarActionButton<Content: View>: View {
     private let variant: ButtonVariant
     
     @State private var isHovered = false
-    @State private var isTooltipVisible = false
     
     // MARK: - Initialization
     public init(
         id: String = UUID().uuidString,
         isActive: Bool = false,
-        tooltipText: String,
+        helpText: String,
         shortcuts: [String] = [],
         variant: ButtonVariant = .default,
         action: @escaping () -> Void,
@@ -30,7 +29,7 @@ public struct SidebarActionButton<Content: View>: View {
     ) {
         self.id = id
         self.isActive = isActive
-        self.tooltipText = tooltipText
+        self.helpText = helpText
         self.shortcuts = shortcuts
         self.variant = variant
         self.action = action
@@ -39,63 +38,35 @@ public struct SidebarActionButton<Content: View>: View {
     
     // MARK: - Body
     public var body: some View {
-        HStack(spacing: 6) {
-            // Active indicator
-            RoundedRectangle(cornerRadius: 1)
-                .fill(Color.white)
-                .frame(width: 2, height: 32)
-                .opacity(isActive ? 1 : 0)
-            
-            // Button
-            Button(action: action) {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                // Active indicator
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.white)
+                    .frame(width: 2, height: 32)
+                    .opacity(isActive ? 1 : 0)
+                    .scaleEffect(isActive ? 1 : 0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isActive)
+                
+                // Content
                 content
                     .foregroundColor(isActive ? .white : .primary.opacity(0.8))
                     .font(.system(size: 16, weight: .medium))
                     .frame(width: 32, height: 32)
             }
-            .buttonStyle(.plain)
-            .background {
+            .frame(height: 32)
+            .overlay {
                 RoundedRectangle(cornerRadius: variant == .circular ? .infinity : 6)
                     .fill(Color.white.opacity(isHovered ? 0.1 : 0))
-                    .padding(variant == .default ? 2 : 0)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: variant == .circular ? .infinity : 6))
-            .tooltip(
-                id: id,
-                isPresented: $isTooltipVisible,
-                config: TooltipConfig(
-                    appearance: .init(
-                        backgroundColor: .white,
-                        textColor: .black
-                    ),
-                    layout: .init(
-                        side: .right,
-                        sideOffset: 8,
-                        alignment: .center
-                    ),
-                    behavior: .init(
-                        avoidCollisions: false,
-                        delayDuration: 0.1
-                    )
-                )
-            ) {
-                HStack(spacing: 8) {
-                    Text(tooltipText)
-                        .font(.system(size: 12))
-                        .foregroundColor(.black)
-                    
-                    if !shortcuts.isEmpty {
-                        KeyboardShortcutGroup(shortcuts)
-                    }
-                }
-                .fixedSize(horizontal: true, vertical: false)
-            }
-            .onHover { hovering in
-                isHovered = hovering
-                isTooltipVisible = hovering
+                    .frame(width: 32, height: 32)
+                    .offset(x: 4) // Offset to align with the content
             }
         }
-        .frame(height: 32)
+        .buttonStyle(.plain)
+        .help(helpText + (shortcuts.isEmpty ? "" : " (" + shortcuts.joined(separator: " ") + ")"))
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }
 
@@ -104,7 +75,7 @@ public extension SidebarActionButton where Content == Image {
     init(
         id: String = UUID().uuidString,
         isActive: Bool = false,
-        tooltipText: String,
+        helpText: String,
         shortcuts: [String] = [],
         systemName: String,
         action: @escaping () -> Void
@@ -112,7 +83,7 @@ public extension SidebarActionButton where Content == Image {
         self.init(
             id: id,
             isActive: isActive,
-            tooltipText: tooltipText,
+            helpText: helpText,
             shortcuts: shortcuts,
             action: action
         ) {
@@ -131,7 +102,7 @@ struct SidebarActionButton_Previews: PreviewProvider {
                 // Simple tooltip without shortcut
                 SidebarActionButton(
                     id: "add",
-                    tooltipText: "Add new item",
+                    helpText: "Add new item",
                     systemName: "plus"
                 ) {
                     print("Add tapped")
@@ -141,7 +112,7 @@ struct SidebarActionButton_Previews: PreviewProvider {
                 SidebarActionButton(
                     id: "settings",
                     isActive: true,
-                    tooltipText: "Settings",
+                    helpText: "Settings",
                     shortcuts: ["⌘"],
                     systemName: "gear"
                 ) {
@@ -151,7 +122,7 @@ struct SidebarActionButton_Previews: PreviewProvider {
                 // With keyboard shortcut group
                 SidebarActionButton(
                     id: "search",
-                    tooltipText: "Search",
+                    helpText: "Search",
                     shortcuts: ["⌘", "F"],
                     systemName: "magnifyingglass"
                 ) {
@@ -161,7 +132,7 @@ struct SidebarActionButton_Previews: PreviewProvider {
                 // With complex keyboard shortcut
                 SidebarActionButton(
                     id: "format",
-                    tooltipText: "Format Code",
+                    helpText: "Format Code",
                     shortcuts: ["⌘", "Shift", "F"],
                     systemName: "chevron.left.forwardslash.chevron.right"
                 ) {
@@ -171,7 +142,7 @@ struct SidebarActionButton_Previews: PreviewProvider {
                 // With option key
                 SidebarActionButton(
                     id: "preview",
-                    tooltipText: "Quick Preview",
+                    helpText: "Quick Preview",
                     shortcuts: ["⌥", "Space"],
                     systemName: "eye"
                 ) {
@@ -181,7 +152,7 @@ struct SidebarActionButton_Previews: PreviewProvider {
                 // With multiple shortcuts
                 SidebarActionButton(
                     id: "run",
-                    tooltipText: "Run Project",
+                    helpText: "Run Project",
                     shortcuts: ["⌘", "R"],
                     systemName: "play.fill"
                 ) {
