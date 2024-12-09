@@ -17,19 +17,47 @@ private enum Constants {
     static let fileAttachmentWidth: CGFloat = 160
 }
 
-struct ChatBubble: View {
-    let message: Message
-    let showAvatar: Bool
-    let showTimestamp: Bool
-    let showUsername: Bool
-    let onFileClick: ((FileAttachment) -> Void)?
+struct ChatBubble<Content: View>: View {
+    let content: Content
+    let leadingAvatar: AnyView?
+    let trailingAvatar: AnyView?
+    let alignment: HorizontalAlignment
     let style: ChatBubbleStyle
+    let showTimestamp: Bool
+    let timestamp: Date?
+    let statusIcon: String?
+    let username: String?
+    let isSystem: Bool
     
     @State private var isHovering = false
     
+    init(
+        style: ChatBubbleStyle,
+        alignment: HorizontalAlignment = .leading,
+        showTimestamp: Bool = false,
+        timestamp: Date? = nil,
+        statusIcon: String? = nil,
+        username: String? = nil,
+        leadingAvatar: AnyView? = nil,
+        trailingAvatar: AnyView? = nil,
+        isSystem: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.style = style
+        self.alignment = alignment
+        self.showTimestamp = showTimestamp
+        self.timestamp = timestamp
+        self.statusIcon = statusIcon
+        self.username = username
+        self.leadingAvatar = leadingAvatar
+        self.trailingAvatar = trailingAvatar
+        self.isSystem = isSystem
+        self.content = content()
+    }
+    
     var body: some View {
         Group {
-            if case .system = message.sender {
+            if isSystem {
                 systemMessage
             } else {
                 regularMessage
@@ -38,7 +66,7 @@ struct ChatBubble: View {
     }
     
     private var systemMessage: some View {
-        Text(message.contents.first?.text ?? "")
+        content
             .font(.system(size: 12))
             .foregroundColor(.secondary)
             .frame(maxWidth: .infinity)
@@ -48,34 +76,33 @@ struct ChatBubble: View {
     
     private var regularMessage: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            if !message.isCurrentUser && showAvatar {
-                if case .internal(let user) = message.sender {
-                    ChatAvatar(user: user, size: Constants.avatarSize)
-                        .padding(.bottom, Constants.avatarBottomPadding)
-                } else if case .external(let user) = message.sender {
-                    ChatAvatar(user: user, size: Constants.avatarSize)
-                        .padding(.bottom, Constants.avatarBottomPadding)
-                }
+            if let leadingAvatar = leadingAvatar {
+                leadingAvatar
+                    .padding(.bottom, Constants.avatarBottomPadding)
             } else {
                 Spacer()
-                    .frame(width: showAvatar ? Constants.avatarSize : 0)
             }
             
-            VStack(alignment: message.isCurrentUser ? .trailing : .leading, spacing: 4) {
-                if showUsername {
-                    if case .internal(let user) = message.sender {
-                        Text(user.name)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    } else if case .external(let user) = message.sender {
-                        Text(user.name)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+            VStack(alignment: alignment, spacing: 4) {
+                if let username = username {
+                    Text(username)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
                 
-                VStack(alignment: message.isCurrentUser ? .trailing : .leading, spacing: 2) {
-                    messageContent
+                VStack(alignment: alignment, spacing: 2) {
+                    content
+                        .padding(Constants.bubblePadding)
+                        .foregroundColor(style.textColor)
+                        .background(
+                            RoundedCorner(
+                                radius: style.cornerRadius,
+                                bottomLeadingRadius: alignment == .trailing ? style.cornerRadius : 4,
+                                bottomTrailingRadius: alignment == .trailing ? 4 : style.cornerRadius
+                            )
+                            .fill(style.backgroundColor)
+                        )
+                        .frame(maxWidth: Constants.maxContentWidth, alignment: alignment == .trailing ? .trailing : .leading)
                     
                     if showTimestamp {
                         timestampView
@@ -84,86 +111,66 @@ struct ChatBubble: View {
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: message.isCurrentUser ? .trailing : .leading)
+            .frame(maxWidth: .infinity, alignment: alignment == .trailing ? .trailing : .leading)
             .onHover { hovering in
                 isHovering = hovering
             }
             
-            if message.isCurrentUser && showAvatar {
-                if case .internal(let user) = message.sender {
-                    ChatAvatar(user: user, size: Constants.avatarSize)
-                        .padding(.bottom, Constants.avatarBottomPadding)
-                }
+            if let trailingAvatar = trailingAvatar {
+                trailingAvatar
+                    .padding(.bottom, Constants.avatarBottomPadding)
             } else {
                 Spacer()
-                    .frame(width: showAvatar ? Constants.avatarSize : 0)
             }
         }
         .padding(.horizontal)
     }
     
-    @ViewBuilder
-    private var messageContent: some View {
-        VStack(alignment: message.isCurrentUser ? .trailing : .leading, spacing: 8) {
-            ForEach(0..<message.contents.count, id: \.self) { index in
-                contentView(for: message.contents[index])
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private func contentView(for content: MessageContentItem) -> some View {
-        switch content {
-        case .file(let attachment):
-            FileAttachmentView(attachment: attachment, style: .compact, onRemove: nil)
-                .onTapGesture {
-                    onFileClick?(attachment)
-                }
-                .frame(width: Constants.fileAttachmentWidth, alignment: message.isCurrentUser ? .trailing : .leading)
-                .help(attachment.name)
-        case .text(let text):
-            Text(text)
-                .padding(Constants.bubblePadding)
-                .foregroundColor(style.textColor)
-                .background(
-                    RoundedCorner(
-                        radius: style.cornerRadius,
-                        bottomLeadingRadius: message.isCurrentUser ? style.cornerRadius : 4,
-                        bottomTrailingRadius: message.isCurrentUser ? 4 : style.cornerRadius
-                    )
-                    .fill(style.backgroundColor)
-                )
-                .frame(maxWidth: Constants.maxContentWidth, alignment: message.isCurrentUser ? .trailing : .leading)
-        case .link(let url, let preview):
-            Link(preview ?? url.absoluteString, destination: url)
-                .padding(Constants.bubblePadding)
-                .foregroundColor(style.textColor)
-                .background(
-                    RoundedCorner(
-                        radius: style.cornerRadius,
-                        bottomLeadingRadius: message.isCurrentUser ? style.cornerRadius : 4,
-                        bottomTrailingRadius: message.isCurrentUser ? 4 : style.cornerRadius
-                    )
-                    .fill(style.backgroundColor)
-                )
-                .frame(maxWidth: Constants.maxContentWidth, alignment: message.isCurrentUser ? .trailing : .leading)
-        }
-    }
-    
     private var timestampView: some View {
         HStack(spacing: 4) {
-            Text(message.timestamp.formatted(.dateTime.hour().minute()))
-                .font(.system(size: 10))
-                .foregroundColor(.secondary.opacity(0.8))
+            if let timestamp = timestamp {
+                Text(timestamp.formatted(.dateTime.hour().minute()))
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary.opacity(0.8))
+            }
             
-            if message.isCurrentUser {
-                Image(systemName: message.status.icon)
+            if let statusIcon = statusIcon {
+                Image(systemName: statusIcon)
                     .font(.system(size: 10))
                     .foregroundColor(.secondary.opacity(0.8))
             }
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 2)
+    }
+}
+
+// Convenience initializer for creating bubbles with avatar views
+extension ChatBubble {
+    init<Avatar: View>(
+        style: ChatBubbleStyle,
+        alignment: HorizontalAlignment = .leading,
+        showTimestamp: Bool = false,
+        timestamp: Date? = nil,
+        statusIcon: String? = nil,
+        username: String? = nil,
+        isSystem: Bool = false,
+        avatar: Avatar?,
+        isAvatarLeading: Bool = true,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(
+            style: style,
+            alignment: alignment,
+            showTimestamp: showTimestamp,
+            timestamp: timestamp,
+            statusIcon: statusIcon,
+            username: username,
+            leadingAvatar: isAvatarLeading ? (avatar != nil ? AnyView(avatar) : nil) : nil,
+            trailingAvatar: !isAvatarLeading ? (avatar != nil ? AnyView(avatar) : nil) : nil,
+            isSystem: isSystem,
+            content: content
+        )
     }
 }
 
@@ -194,133 +201,230 @@ struct ChatBubble_Previews: PreviewProvider {
         cornerRadius: 8
     )
     
+    // Sample users for previews
+    private static let internalUser = User(
+        id: "1",
+        name: "John Internal",
+        email: "john@company.com",
+        avatarUrl: nil,
+        status: .online,
+        role: .member,
+        type: .internal
+    )
+    
+    private static let externalUser = User(
+        id: "2",
+        name: "Jane External",
+        email: "jane@external.com",
+        avatarUrl: nil,
+        status: .online,
+        role: .member,
+        type: .external,
+        account: Account(name: "External Corp", logoUrl: nil)
+    )
+    
+    // Sample attachments for previews
+    private static let sampleAttachments = [
+        FileAttachment(
+            id: "1",
+            name: "Document.pdf",
+            size: 1024 * 1024,
+            mimeType: "application/pdf",
+            url: URL(string: "https://example.com/doc.pdf")!,
+            thumbnail: nil
+        ),
+        FileAttachment(
+            id: "2",
+            name: "Image.png",
+            size: 512 * 1024,
+            mimeType: "image/png",
+            url: URL(string: "https://example.com/image.png")!,
+            thumbnail: URL(string: "https://example.com/image_preview.png")
+        )
+    ]
+    
     static var previews: some View {
         ScrollView {
             VStack(spacing: 24) {
                 // Message Types Section
                 PreviewSection("Message Types") {
+                    // Internal user message
                     ChatBubble(
-                        message: Message.preview,
-                        showAvatar: true,
+                        style: internalStyle,
+                        alignment: .trailing,
                         showTimestamp: true,
-                        showUsername: true,
-                        onFileClick: nil,
-                        style: internalStyle
-                    )
+                        timestamp: Date(),
+                        statusIcon: "checkmark",
+                        username: "John Internal",
+                        avatar: ChatAvatar(user: internalUser, size: Constants.avatarSize),
+                        isAvatarLeading: false
+                    ) {
+                        Text("Internal user message")
+                    }
                     
+                    // External user message
                     ChatBubble(
-                        message: Message.previewExternal,
-                        showAvatar: true,
+                        style: externalStyle,
                         showTimestamp: true,
-                        showUsername: true,
-                        onFileClick: nil,
-                        style: externalStyle
-                    )
+                        timestamp: Date(),
+                        username: "Jane External",
+                        avatar: ChatAvatar(user: externalUser, size: Constants.avatarSize)
+                    ) {
+                        Text("External user message")
+                    }
                     
+                    // AI message
                     ChatBubble(
-                        message: Message.previewAI,
-                        showAvatar: true,
+                        style: aiStyle,
                         showTimestamp: true,
-                        showUsername: true,
-                        onFileClick: nil,
-                        style: aiStyle
-                    )
+                        timestamp: Date(),
+                        username: "AI Assistant",
+                        avatar: AnyView(
+                            Circle()
+                                .fill(Color(.windowBackgroundColor))
+                                .overlay {
+                                    Image(systemName: "sparkle")
+                                        .foregroundColor(.secondary)
+                                }
+                                .frame(width: Constants.avatarSize, height: Constants.avatarSize)
+                        )
+                    ) {
+                        Text("AI assistant message")
+                    }
                     
+                    // System message
                     ChatBubble(
-                        message: Message.previewSystem,
-                        showAvatar: true,
-                        showTimestamp: true,
-                        showUsername: true,
-                        onFileClick: nil,
-                        style: systemStyle
-                    )
+                        style: systemStyle,
+                        isSystem: true
+                    ) {
+                        Text("System message")
+                    }
                 }
                 
                 // Content Types Section
                 PreviewSection("Content Types") {
+                    // Multiple content in single message
                     ChatBubble(
-                        message: Message.previewWithAttachment,
-                        showAvatar: true,
+                        style: internalStyle,
+                        alignment: .trailing,
                         showTimestamp: true,
-                        showUsername: true,
-                        onFileClick: { _ in },
-                        style: internalStyle
-                    )
+                        timestamp: Date(),
+                        username: "John Internal",
+                        avatar: ChatAvatar(user: internalUser, size: Constants.avatarSize),
+                        isAvatarLeading: false
+                    ) {
+                        VStack(alignment: .trailing, spacing: 8) {
+                            Text("Here are the files you requested")
+                            
+                            FileAttachmentView(
+                                attachment: sampleAttachments[0],
+                                style: .compact,
+                                onRemove: nil
+                            )
+                            .frame(width: Constants.fileAttachmentWidth)
+                            
+                            FileAttachmentView(
+                                attachment: sampleAttachments[1],
+                                style: .compact,
+                                onRemove: nil
+                            )
+                            .frame(width: Constants.fileAttachmentWidth)
+                            
+                            Text("Let me know if you need anything else!")
+                        }
+                    }
                     
+                    // Mixed content with link
                     ChatBubble(
-                        message: Message.previewMixed,
-                        showAvatar: true,
+                        style: externalStyle,
                         showTimestamp: true,
-                        showUsername: true,
-                        onFileClick: { _ in },
-                        style: externalStyle
-                    )
+                        timestamp: Date(),
+                        username: "Jane External",
+                        avatar: ChatAvatar(user: externalUser, size: Constants.avatarSize)
+                    ) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Check out this image and the documentation")
+                            
+                            FileAttachmentView(
+                                attachment: sampleAttachments[1],
+                                style: .compact,
+                                onRemove: nil
+                            )
+                            .frame(width: Constants.fileAttachmentWidth)
+                            
+                            Link("View Documentation", destination: URL(string: "https://example.com/docs")!)
+                                .foregroundColor(.blue)
+                        }
+                    }
                 }
                 
                 // Long Messages Section
                 PreviewSection("Long Messages") {
                     ChatBubble(
-                        message: Message.previewLongMessage,
-                        showAvatar: true,
+                        style: internalStyle,
+                        alignment: .trailing,
                         showTimestamp: true,
-                        showUsername: true,
-                        onFileClick: nil,
-                        style: internalStyle
-                    )
+                        timestamp: Date()
+                    ) {
+                        Text("This is a very long message that should demonstrate how the chat bubble handles text wrapping for longer content. It should maintain readability while staying within the maximum width constraints.")
+                    }
                     
                     ChatBubble(
-                        message: Message.previewMultiline,
-                        showAvatar: true,
+                        style: externalStyle,
                         showTimestamp: true,
-                        showUsername: true,
-                        onFileClick: nil,
-                        style: externalStyle
-                    )
+                        timestamp: Date()
+                    ) {
+                        Text("This message has\nmultiple lines\nto show how line breaks\nare handled")
+                    }
                 }
                 
                 // Consecutive Messages Section
                 PreviewSection("Consecutive Messages") {
                     VStack(spacing: 2) {
                         ChatBubble(
-                            message: Message.previewConsecutive1,
-                            showAvatar: true,
+                            style: internalStyle,
+                            alignment: .trailing,
                             showTimestamp: true,
-                            showUsername: true,
-                            onFileClick: nil,
-                            style: internalStyle
-                        )
+                            timestamp: Date(),
+                            username: "John Internal",
+                            avatar: ChatAvatar(user: internalUser, size: Constants.avatarSize),
+                            isAvatarLeading: false
+                        ) {
+                            Text("First message in a consecutive series")
+                        }
                         
                         ChatBubble(
-                            message: Message.previewConsecutive2,
-                            showAvatar: false,
+                            style: internalStyle,
+                            alignment: .trailing,
                             showTimestamp: true,
-                            showUsername: false,
-                            onFileClick: nil,
-                            style: internalStyle
-                        )
+                            timestamp: Date()
+                        ) {
+                            Text("Second message, no avatar")
+                        }
                         
                         ChatBubble(
-                            message: Message.previewConsecutive3,
-                            showAvatar: false,
+                            style: internalStyle,
+                            alignment: .trailing,
                             showTimestamp: true,
-                            showUsername: false,
-                            onFileClick: nil,
-                            style: internalStyle
-                        )
+                            timestamp: Date()
+                        ) {
+                            Text("Third message in the series")
+                        }
                     }
                 }
                 
                 // Status Indicators Section
-                PreviewSection("Message Status") {
-                    ForEach(MessageStatus.allCases, id: \.self) { status in
+                PreviewSection("Status Indicators") {
+                    ForEach(["checkmark", "checkmark.circle", "exclamationmark.circle"], id: \.self) { icon in
                         ChatBubble(
-                            message: Message.previewWithStatus(status),
-                            showAvatar: true,
+                            style: internalStyle,
+                            alignment: .trailing,
                             showTimestamp: true,
-                            showUsername: true,
-                            onFileClick: nil,
-                            style: internalStyle
-                        )
+                            timestamp: Date(),
+                            statusIcon: icon
+                        ) {
+                            Text("Message with status: \(icon)")
+                        }
                     }
                 }
             }
@@ -352,87 +456,6 @@ private struct PreviewSection<Content: View>: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-// Additional Preview Messages
-extension Message {
-    static let previewLongMessage: Message = {
-        do {
-            return try Message(
-                id: "long",
-                contents: [.text("This is a very long message that should demonstrate how the chat bubble handles text wrapping for longer content. It should maintain readability while staying within the maximum width constraints.")],
-                sender: .internal(User.previewInternal),
-                status: .sent
-            )
-        } catch {
-            fatalError("Failed to create preview message: \(error)")
-        }
-    }()
-    
-    static let previewMultiline: Message = {
-        do {
-            return try Message(
-                id: "multiline",
-                contents: [.text("This message has\nmultiple lines\nto show how line breaks\nare handled")],
-                sender: .external(User.previewExternal),
-                status: .delivered
-            )
-        } catch {
-            fatalError("Failed to create preview message: \(error)")
-        }
-    }()
-    
-    static let previewConsecutive1: Message = {
-        do {
-            return try Message(
-                id: "consecutive1",
-                contents: [.text("First message in a consecutive series")],
-                sender: .internal(User.previewInternal),
-                status: .sent
-            )
-        } catch {
-            fatalError("Failed to create preview message: \(error)")
-        }
-    }()
-    
-    static let previewConsecutive2: Message = {
-        do {
-            return try Message(
-                id: "consecutive2",
-                contents: [.text("Second message, no avatar or username")],
-                sender: .internal(User.previewInternal),
-                status: .sent
-            )
-        } catch {
-            fatalError("Failed to create preview message: \(error)")
-        }
-    }()
-    
-    static let previewConsecutive3: Message = {
-        do {
-            return try Message(
-                id: "consecutive3",
-                contents: [.text("Third message in the series")],
-                sender: .internal(User.previewInternal),
-                status: .sent
-            )
-        } catch {
-            fatalError("Failed to create preview message: \(error)")
-        }
-    }()
-    
-    static func previewWithStatus(_ status: MessageStatus) -> Message {
-        do {
-            return try Message(
-                id: "status_\(status)",
-                contents: [.text("Message with status: \(String(describing: status))")],
-                sender: .internal(User.previewInternal),
-                status: status
-            )
-        } catch {
-            fatalError("Failed to create preview message: \(error)")
-        }
     }
 }
 #endif
