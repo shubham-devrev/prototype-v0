@@ -8,30 +8,41 @@
 import SwiftUI
 import SwiftData
 
+//@main
+//struct prototype_v0App: App {
+//    init() {
+//        WindowConfig.configureMainWindow()
+//    }
+//    
+//    var sharedModelContainer: ModelContainer = {
+//        let schema = Schema([
+//            Item.self,
+//        ])
+//        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+//
+//        do {
+//            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+//        } catch {
+//            fatalError("Could not create ModelContainer: \(error)")
+//        }
+//    }()
+//
+//    var body: some Scene {
+//        WindowGroup {
+//            ContentView()
+//        }
+//        .windowStyle(.hiddenTitleBar)
+//        .modelContainer(sharedModelContainer)
+//    }
+//}
+
+// App entry point
 @main
 struct prototype_v0App: App {
-    init() {
-        WindowConfig.configureMainWindow()
-    }
-    
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            SwipeBasedInteractonWindow()
         }
-        .windowStyle(.hiddenTitleBar)
-        .modelContainer(sharedModelContainer)
+        .windowStyle(.hiddenTitleBar) // Optional: for a more modern look
     }
 }

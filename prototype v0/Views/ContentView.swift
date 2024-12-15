@@ -8,7 +8,9 @@
 import SwiftUI
 import AppKit
 
+
 struct ContentView: View {
+    @StateObject private var windowManager = WindowManager.shared
     @State private var showingPanel = false
     @State private var searchText = ""
     @State private var selectedView = "home"
@@ -24,11 +26,23 @@ struct ContentView: View {
                 
                 // Main content area
                 VStack {
+                    // Toolbar with new window button
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            windowManager.openNewWindow()
+                        }) {
+                            Image(systemName: "plus.square")
+                            Text("New Window")
+                        }
+                        .padding(.horizontal)
+                    }
+                    
                     // Main content view switching
                     Group {
                         switch selectedView {
                         case "home":
-                            HomeView()
+                            TodayView()
                         case "inbox":
                             InboxView()
                         case "explore":

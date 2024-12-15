@@ -19,14 +19,14 @@ struct SidebarView: View {
                 SidebarActionButton(
                     id: "home",
                     isActive: activeButton == "home",
-                    helpText: "Home",
+                    helpText: "Today",
                     shortcuts: ["⌘", "1"],
                     action: { 
                         activeButton = "home"
                         resetAvatarOrder()
                     }
                 ) {
-                    Image(systemName: "house")
+                    Image(systemName: "calendar")
                 }
                 
                 SidebarActionButton(

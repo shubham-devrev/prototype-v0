@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct HomeView: View {
+struct TodayView: View {
     var body: some View {
         VStack(spacing: 20) {
             Text("Welcome to Your Dashboard")
@@ -39,5 +39,5 @@ struct HomeView: View {
 }
 
 #Preview {
-    HomeView()
+    TodayView()
 } 
